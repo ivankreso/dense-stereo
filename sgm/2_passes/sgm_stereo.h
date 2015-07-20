@@ -16,7 +16,7 @@ class SGMStereo {
   // Default parameters
   static const int kNumPaths = 4;
   static const int kDisparityRange = 256;
-  static const double kDisparityFactor = 256;
+  static const int kDisparityFactor = 256;
   static const int kP1 = 3;
   static const int kP2 = 40;
   static const int kConsistencyThreshold = 1;

@@ -5,8 +5,6 @@
 
 namespace recon {
 
-
-
 SGMStereo::SGMStereo() : disp_range_(kDisparityRange),
                          disparity_factor_(kDisparityFactor),
                          P1_(kP1),
@@ -63,7 +61,6 @@ void SGMStereo::Compute(const std::string left_descriptors_path,
   for (int y = 0; y < height_; ++y) {
     for (int x = 0; x < width_; ++x) {
       //std::cout << left_disp_image[width_*y + x] << "\n";
-      //DisparityType scaled_disp = std::round(left_disp_image[width_*y + x] * disparity_factor_);
       DisparityType scaled_disp = std::round(left_disp_image[width_*y + x]);
       disparity->at<uint16_t>(y,x) = static_cast<uint16_t>(scaled_disp);
     }
@@ -93,34 +90,20 @@ void SGMStereo::AllocateDataBuffer() {
   right_cost_ = new CostType[width_ * height_ * disp_range_]();
 
   // size of the final summed costs
-  int sum_cost_size = width_ * disp_range_ * height_;
+  int sum_cost_size = width_ * height_ * disp_range_;
   sum_cost_ = new CostType[sum_cost_size];
 
-  //path_min_cost_buffer_sz_ = (width_ + 2) * num_paths_;
-
-  // size of buffer for storing the min values across all disparities for each path
-  // which are then used to normalize the aggregated cost to achieve upper bound: L <= C_max + P2
-  //path_min_size_ = width_ * num_paths_;
-  //padded_width_ = width_ + 2;
-  //padded_disp_range_ = disp_range_ + 2;
-
-  // size of buffer used to store the aggregated costs for each path and each disparity value
+  // size of aggregated cost buffer for one image row
   int lr_size = width_ * disp_range_;
   for (int i = 0; i < kNumPaths; i++) {
+    // buffers for storing the min values across all disparities for each path
+    // which are then used to normalize the aggregated cost to achieve upper bound: L <= C_max + P2
     lr_min_prev_[i] = new CostType[width_];
     lr_min_curr_[i] = new CostType[width_];
+    // buffers used to store the aggregated costs for each path and each disparity value
     lr_curr_[i] = new CostType[lr_size];
     lr_prev_[i] = new CostType[lr_size];
   }
-
-  //for (int i = 0; i < path_cost_size_; i++) {
-  //  path_cost_prev_[i] = kCostMax;
-  //  path_cost_curr_[i] = kCostMax;
-  //}
-
-  // final size of the SGM buffer
-  //sgm_buffer_size_ = (path_min_size_ + path_cost_size_) * kNumRowBuffers + sum_cost_size_ + 16;
-  //sgm_buffer_ = new CostType[sgm_buffer_size_];
 }
 
 void SGMStereo::FreeDataBuffer() {
@@ -137,7 +120,6 @@ void SGMStereo::FreeDataBuffer() {
 
 void SGMStereo::ComputeCostImage(const DescriptorTensor& left_descriptors,
                                  const DescriptorTensor& right_descriptors) {
-  //std::memset(left_cost_, 0, sizeof left_cost_);
   ComputeLeftCostImage(left_descriptors, right_descriptors);
   ComputeRightCostImage();
 }
