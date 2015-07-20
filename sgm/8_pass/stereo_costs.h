@@ -8,7 +8,7 @@
 
 #include <Eigen/Core>
 
-#include "../../core/types.h"
+#include "types.h"
 
 namespace recon
 {

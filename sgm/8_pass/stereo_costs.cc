@@ -2,8 +2,6 @@
 
 #include <iostream>
 
-#include "../../core/types.h"
-
 namespace recon
 {
 namespace StereoCosts
