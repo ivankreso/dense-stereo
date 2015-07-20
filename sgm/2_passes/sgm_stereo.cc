@@ -211,112 +211,110 @@ void SGMStereo::PerformSGM(const CostType* data_cost, DisparityType* disparity_i
   const CostType kCostMax = std::numeric_limits<CostType>::max();
 
   // we have 2 passes each aggregating the costs from 4 paths
-  // where 1 pass starts from upper left pixel and 2 pass from lower right pixel
+  // where 1 pass starts from top left pixel and 2 pass from bottom right pixel
   const int kNumPasses = 2;
   for (int pass_cnt = 0; pass_cnt < kNumPasses; pass_cnt++) {
     int startX, endX, stepX;
     int startY, endY, stepY;
+    // first pass performs row-wise iteration starting from top left pixel
     if (pass_cnt == 0) {
       startX = 0; endX = width_; stepX = 1;
       startY = 0; endY = height_; stepY = 1;
-    } else {
+    }
+    // second pass performs reverse row-wise iteration starting from bottom right pixel
+    else {
       startX = width_ - 1; endX = -1; stepX = -1;
       startY = height_ - 1; endY = -1; stepY = -1;
     }
 
+    // iterate over rows
     for (int y = startY; y != endY; y += stepY) {
+      // pointer to data cost for current row
       const CostType* data_cost_row = data_cost + y*width_*disp_range_;
+      // pointer to aggregated cost for current row
       CostType* sum_cost_row = sum_cost_ + y*width_*disp_range_;
 
+      // iterate over columns
       for (int x = startX; x != endX; x += stepX) {
-        // 4 paths pointers for current pixel
-        const CostType* lr_p[kNumPaths] = {nullptr};
-        CostType min_lr_p[kNumPaths] = {0.0};
-        //for (int i = 0; i < 4; i++) {
-        // std::cout << lr_p[i] << "\n";
-        // std::cout << min_lr_p[i] << "\n";
-        //}
+        // pointers to 4 paths cost for current pixel
+        const CostType* lr_p[kNumPaths] = { nullptr };
+        // buffer to store temp minimum costs for each of the 4 paths
+        CostType min_lr_p[kNumPaths] = { 0.0 };
 
+        // set the write pointers for each path for the current pixel
         int x_skip = x * disp_range_;
         CostType* lr_curr_p[kNumPaths];
         for (int r = 0; r < kNumPaths; r++)
           lr_curr_p[r] = lr_curr_[r] + x_skip;
 
-        const CostType* dc_p = data_cost_row + x_skip;
+        // set the pointers for each path cost and min_cost
+        // to appropriate neighbour of the current pixel
         if (x != startX) {
-          // left
+          // 1. left/right pixel is in current row lr_curr_
           lr_p[0] = lr_curr_[0] + (x-stepX)*disp_range_;
           min_lr_p[0] = lr_min_curr_[0][x-stepX];
         }
         if (y != startY) {
-          // upper center
+          // 2. upper/lower center pixel is in lr_prev_
           lr_p[2] = lr_prev_[2] + x*disp_range_;
           min_lr_p[2] = lr_min_prev_[2][x];
-          // upper left
+          // 3. upper/lower left pixel is in lr_prev_
           if (x != startX) {
             lr_p[1] = lr_prev_[1] + (x-stepX)*disp_range_;
             min_lr_p[1] = lr_min_prev_[1][x-stepX];
           }
-          // upper right
+          // 4. upper/lower right pixel is in lr_prev_
           if (x != (endX-stepX)) {
             lr_p[3] = lr_prev_[3] + (x+stepX)*disp_range_;
             min_lr_p[3] = lr_min_prev_[3][x+stepX];
           }
         }
-        // we dont need to initialize lr_min because of this line
+
+        const CostType* dc_p = data_cost_row + x_skip;
         for (int r = 0; r < kNumPaths; r++)
           lr_min_curr_[r][x] = kCostMax;
         CostType* sum_cost_p = sum_cost_row + x_skip;
+        // iterate over disparities
         for (int d = 0; d < disp_range_; d++) {
+          // code below computes the following SGM cost:
           // L_r(p, d) = C(p, d) + min(L_r(p-r, d),
           // L_r(p-r, d-1) + P1, L_r(p-r, d+1) + P1,
           // min_k L_r(p-r, k) + P2) - min_k L_r(p-r, k)
           // where p = (x,y), r is one of the directions.
 
+          // aggregate costs for each path
           for (int r = 0; r < kNumPaths; r++) {
-          //for (int r = 3; r < 4; r++) {
-            // we dont need to initialize lr_curr_ because of this line
+            // we dont need to initialize lr_curr_ in the beginning because of this line
             lr_curr_p[r][d] = dc_p[d];
+            // fist check if the path exists
             if (lr_p[r] != nullptr) {
-              //if (lr_p[r][d] < 0 || lr_p[r][d] > 500)
-              //  std::cout << lr_p[r][d] << "\n";
               CostType agg_cost = std::min(min_lr_p[r] + P2_, lr_p[r][d]);
+              // check if disp-1 exists
               if (d > 0) {
-                //std::cout << lr_p[r][d-1] << "\n";
-                // works much better with below hmmm
-                //agg_cost = std::min(agg_cost, lr_p[r][d-1]);
-                //agg_cost = std::min(agg_cost, lr_p[r][d-1] + P1_);
                 CostType tmp_cost = lr_p[r][d-1] + P1_;
-                //CostType tmp_cost = lr_p[r][d-1];
+                // we need min
                 if (agg_cost > tmp_cost)
                   agg_cost = tmp_cost;
               }
+              // check if disp+1 exists
               if (d < (disp_range_ - 1)) {
-                //std::cout << lr_p[r][d+1] << "\n";
-                //agg_cost = std::min(agg_cost, lr_p[r][d+1]);
-                //agg_cost = std::min(agg_cost, lr_p[r][d+1] + P1_);
                 CostType tmp_cost = lr_p[r][d+1] + P1_;
-                //CostType tmp_cost = lr_p[r][d+1];
+                // we need min
                 if (agg_cost > tmp_cost)
                   agg_cost = tmp_cost;
               }
               lr_curr_p[r][d] += agg_cost - min_lr_p[r];
-              //lr_curr_p[d] += agg_cost;
-              //std::cout << agg_cost - min_lr_p[r] << "\n";
-              //std::cout << min_lr_p[r] << "\n";
-              //std::cout << lr_curr_p[d] << "\n";
             }
+            // if the cost is smallest so far set new min which is needed for next iterations
             if (lr_min_curr_[r][x] > lr_curr_p[r][d])
               lr_min_curr_[r][x] = lr_curr_p[r][d];
+            // finally sum the costs over all paths
             sum_cost_p[d] += lr_curr_p[r][d];
           }
-
-          //sum_cost_p[d] = lr_curr_p[d];
-          //std::cout << lr_curr_p[d] << "\n";
-          //std::cout << P1_ << "\n" << P2_ << "\n";
         }
       }
 
+      // compute the disparity map
       if (pass_cnt == kNumPasses - 1) {
         DisparityType* disparityRow = disparity_img + width_*y;
 
@@ -353,12 +351,13 @@ void SGMStereo::PerformSGM(const CostType* data_cost, DisparityType* disparity_i
         }
       }
 
+      // set current row buffer as previous row buffer for next iteration
       std::swap(lr_curr_, lr_prev_);
       std::swap(lr_min_curr_, lr_min_prev_);
     }
   }
 
-  // TODO
+  // TODO check this code
   SpeckleFilter(100, static_cast<int>(2*disparity_factor_), disparity_img);
 }
 
